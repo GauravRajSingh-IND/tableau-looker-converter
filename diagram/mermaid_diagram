@@ -1,0 +1,74 @@
+flowchart TD
+  %% ========= STYLES =========
+  classDef frontEnd fill:#E3F2FD,stroke:#1E88E5,stroke-width:1px,color:#0D47A1;
+  classDef backEnd fill:#E8F5E9,stroke:#43A047,stroke-width:1px,color:#1B5E20;
+  classDef storage fill:#FFF3E0,stroke:#FB8C00,stroke-width:1px,color:#E65100;
+  classDef external fill:#F3E5F5,stroke:#8E24AA,stroke-width:1px,color:#4A148C;
+  classDef process fill:#FFFFFF,stroke:#B0BEC5,stroke-width:1px,color:#263238;
+
+  %% ========= FRONTEND =========
+  subgraph FE[Frontend – GCP Agent Space]
+    FE_Agent["Agent Chat / Tool UI"]
+  end
+  class FE_Agent frontEnd
+
+  %% ========= BACKEND SERVICE =========
+  subgraph BE[Backend – Tableau → Looker Conversion Service]
+    BE_API["HTTP API Endpoint<br/>POST /convert_twb"]
+    BE_Parser["TWB Parser<br/><span style='font-size:11px'>.twb XML → Tableau JSON Summary</span>"]
+    BE_Gen["LLM Generation Orchestrator<br/><span style='font-size:11px'>Call 1 – Generate LookML</span>"]
+    BE_QA["LLM QA Orchestrator<br/><span style='font-size:11px'>Call 2 – Manual Intervention Check</span>"]
+    BE_Pack["File Writer & Packager<br/><span style='font-size:11px'>Write .lkml + ZIP bundle</span>"]
+  end
+  class BE_API,BE_Parser,BE_Gen,BE_QA,BE_Pack backEnd
+
+  %% ========= STORAGE =========
+  subgraph ST[Storage – Google Cloud Storage (GCS)]
+    ST_TWB["Bucket: /jobs/{id}/input.twb<br/><span style='font-size:11px'>Original Tableau .twb</span>"]
+    ST_JSON["Bucket: /jobs/{id}/semantic_model.json<br/><span style='font-size:11px'>Tableau JSON Summary</span>"]
+    ST_LKML["Folder: /jobs/{id}/lookml/*.lkml<br/><span style='font-size:11px'>Generated LookML files</span>"]
+    ST_ZIP["Object: /jobs/{id}/looker_project.zip<br/><span style='font-size:11px'>LookML Project ZIP</span>"]
+    ST_QA["Object: /jobs/{id}/qa_report.json<br/><span style='font-size:11px'>QA – Manual Intervention & Reasons</span>"]
+  end
+  class ST_TWB,ST_JSON,ST_LKML,ST_ZIP,ST_QA storage
+
+  %% ========= EXTERNAL LLM =========
+  subgraph EX[External LLM Provider]
+    EX_LLM1["LLM API – Call 1<br/><span style='font-size:11px'>Generate LookML</span>"]
+    EX_LLM2["LLM API – Call 2<br/><span style='font-size:11px'>QA & Risk Assessment</span>"]
+  end
+  class EX_LLM1,EX_LLM2 external
+
+  %% ========= MAIN FLOW =========
+  %% 1. User uploads TWB via Agent Space
+  FE_Agent -->|"1. Upload Tableau .twb<br/>and options (dialect, use LLM)"| BE_API
+
+  %% 2. API stores input and triggers parsing
+  BE_API -->|"2. Store original .twb"| ST_TWB
+  BE_API -->|"3. Parse workbook"| BE_Parser
+
+  %% 3. Parser produces JSON summary
+  BE_Parser -->|"4. Write Tableau JSON Summary"| ST_JSON
+  BE_Parser -->|"5. Pass summary to generator"| BE_Gen
+
+  %% 4. LLM Call 1 – Generate LookML project
+  BE_Gen -->|"Call 1:<br/>JSON summary + instructions"| EX_LLM1
+  EX_LLM1 -->|"LookML project JSON:<br/>model.lkml + view.lkml content"| BE_Gen
+
+  %% 5. Generator writes LookML and packages ZIP
+  BE_Gen -->|"6. Write .lkml files"| ST_LKML
+  BE_Gen -->|"7. Create ZIP bundle"| BE_Pack
+  BE_Pack -->|"8. Store ZIP"| ST_ZIP
+
+  %% 6. LLM Call 2 – QA & Manual Intervention check
+  BE_Gen -->|"LookML summary<br/>explores, views, joins, calcs"| BE_QA
+  ST_JSON -->|"Tableau JSON Summary"| BE_QA
+  BE_QA -->|"Call 2:<br/>JSON summary + LookML summary"| EX_LLM2
+  EX_LLM2 -->|"QA JSON:<br/>manual_intervention_required + reasons"| BE_QA
+  BE_QA -->|"9. Store QA report"| ST_QA
+
+  %% 7. Response back to Agent
+  BE_API -->|"10. Respond with:<br/>• LookML ZIP URL<br/>• QA summary (manual intervention? Yes/No)"| FE_Agent
+
+  %% ========= OPTIONAL: CLASS ASSIGNMENTS FOR PROCESS NODES =========
+  class BE_Parser,BE_Gen,BE_QA,BE_Pack process
