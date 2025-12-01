@@ -1,0 +1,58 @@
+tableau_to_looker_mvp/
+├─ app/
+│  ├─ __init__.py
+│  ├─ main_fastapi.py        # FastAPI entrypoint
+│  ├─ main_flask.py          # Flask entrypoint (optional)
+│  └─ api/
+│     ├─ __init__.py
+│     ├─ routes_convert.py   # /convert_twb HTTP route(s)
+│     └─ deps.py             # shared dependencies (config, services)
+│
+├─ core/
+│  ├─ __init__.py
+│  ├─ config.py              # env vars, GCP config, model names, flags
+│  ├─ logging.py             # logger setup
+│  ├─ errors.py              # custom exceptions
+│  └─ types.py               # common type aliases / enums
+│
+├─ domain/
+│  ├─ __init__.py
+│  ├─ tableau_semantic.py    # dataclasses / pydantic models for semantic_model.json
+│  ├─ lookml_project.py      # in-memory representation of model/view/dashboard files
+│  └─ qa_report.py           # structure for QA JSON
+│
+├─ services/
+│  ├─ __init__.py
+│  ├─ parser_service.py      # .twb → TableauSemanticModel (JSON)
+│  ├─ generation_service.py  # LLM Call 1: semantic model → LookML project (model/views/dashboards)
+│  ├─ qa_service.py          # LLM Call 2: semantic model + LookML summary → QA report
+│  ├─ packaging_service.py   # write .lkml files, create ZIP
+│  └─ storage_service.py     # read/write to GCS (TWB, JSON, LKML, ZIP, QA)
+│
+├─ llm/
+│  ├─ __init__.py
+│  ├─ client.py              # thin wrapper over Vertex/OpenAI/etc.
+│  ├─ generation_prompts.py  # prompt templates for Call 1
+│  ├─ qa_prompts.py          # prompt templates for Call 2
+│  └─ schemas.py             # pydantic models for LLM I/O (request/response JSON)
+│
+├─ adapters/
+│  ├─ __init__.py
+│  ├─ gcs_client.py          # Google Cloud Storage wrapper (upload, download, build URLs)
+│  └─ twb_xml_parser.py      # low-level XML parsing helpers (no business logic)
+│
+├─ tests/
+│  ├─ __init__.py
+│  ├─ test_parser_service.py
+│  ├─ test_generation_service.py
+│  ├─ test_qa_service.py
+│  └─ test_end_to_end.py
+│
+├─ scripts/
+│  ├─ run_local_fastapi.py   # dev helper to run FastAPI locally
+│  └─ sample_convert.py      # quick script: local .twb → ZIP + QA (bypass HTTP)
+│
+├─ pyproject.toml            # or setup.cfg / requirements.txt
+├─ Dockerfile
+├─ README.md
+└─ .env.example              # sample env config (GCP project, bucket, LLM endpoint)
